@@ -1,0 +1,47 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Backend
+backend/target/
+backend/*.log
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# ML Models
+ml_service/models/
+*.pth
+*.pkl
+
+# ML models
+ml_service/models/*.pkl
+
+# ML models
+ml_service/models/
+*.pth
+*.pkl
+*.h5
+
+# Logs
+*.log
+logs/
+
+# Secrets
+application.properties
+application-dev.properties

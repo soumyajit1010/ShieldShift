@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #14141E;
+  @apply text-gray-100 antialiased selection:bg-brand-500 selection:text-white;
+}
+
+input, select {
+  background-color: #252634;
+  border-color: #2E2F3E;
+  border-width: 1px;
+  @apply text-white placeholder-gray-500;
+}
