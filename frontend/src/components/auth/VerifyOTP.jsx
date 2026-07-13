@@ -39,37 +39,65 @@ export default function VerifyOTP() {
   };
 
   const verifyOtp = async () => {
-    const otpValue = otp.join("");
+  const otpValue = otp.join("");
 
-    if (otpValue.length !== 4) {
-      toast.error("Please enter a valid 4-digit OTP");
-      return;
-    }
+  if (otpValue.length !== 4) {
+    toast.error("Please enter a valid 4-digit OTP");
+    return;
+  }
 
-    try {
-      setIsLoading(true);
+  try {
+    setIsLoading(true);
 
-      await authApi.verifyOtp(phone, otpValue);
+    const res = await authApi.verifyOtp(phone, otpValue);
+
+    console.log("registered =", res.registered);
+
+
+    if (res.registered) {
+
+
+        console.log("Going to dashboard");
+
+      // Existing user
+      login("temp-token", res.user);
+
+      toast.success("Welcome back!");
+
+      navigate("/dashboard");
+
+    } else {
+
+
+  console.log("Going to onboarding");
+
+      // New user
+      login("temp-token", {
+        mobileNumber: phone,
+      });
 
       toast.success("OTP Verified");
 
-      navigate("/onboarding", {
-        state: {
-          phone,
-        },
-      });
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Invalid OTP");
+      window.location.href = "/onboarding";
 
-      setOtp(["", "", "", ""]);
-
-      if (inputs.current[0]) {
-        inputs.current[0].focus();
-      }
-    } finally {
-      setIsLoading(false);
     }
-  };
+
+  } catch (error) {
+
+    toast.error(
+      error.response?.data?.message || "Invalid OTP"
+    );
+
+    setOtp(["", "", "", ""]);
+
+    if (inputs.current[0]) {
+      inputs.current[0].focus();
+    }
+
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="flex flex-col min-h-screen bg-dark-bg text-gray-100">

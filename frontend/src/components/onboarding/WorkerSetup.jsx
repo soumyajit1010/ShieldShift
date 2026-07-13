@@ -13,7 +13,11 @@ import {
   Zap,
 } from "lucide-react";
 
+
+
 export default function WorkerSetup() {
+console.log("WorkerSetup Rendered");
+
   const [isLoading, setIsLoading] = useState(false);
 
   const navigate = useNavigate();
