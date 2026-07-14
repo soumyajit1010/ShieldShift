@@ -103,6 +103,14 @@ public class PolicyService {
         response.setStatus(
                 policy.getStatus().name());
 
+        response.setCoverageStart(
+                policy.getCoverageStart());
+
+        response.setCoverageEnd(
+                policy.getCoverageEnd());
+
+
+
         return response;
     }
 

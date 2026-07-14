@@ -45,13 +45,13 @@ export const workerApi = {
     return response.data;
   },
 
-  getDashboard: async () => {
-    return {
-      status: "ACTIVE",
-      coveredDisruptions: 0,
-      activeEvents: []
-    };
-  }
+  getDashboard: async (workerId) => {
+  const response = await axios.get(
+    `${API_URL}/dashboard/${workerId}`
+  );
+
+  return response.data;
+}
 };
 
 export const policyApi = {

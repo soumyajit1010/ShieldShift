@@ -13,6 +13,14 @@ public interface PolicyRepository extends JpaRepository<Policy, Long> {
             User worker,
             PolicyStatus status
     );
-    Optional<Policy> findTopByWorkerIdOrderByIdDesc(Long workerId);
+
+    Optional<Policy> findTopByWorkerIdOrderByIdDesc(
+            Long workerId
+    );
+
+    Optional<Policy> findTopByWorkerIdAndStatusOrderByIdDesc(
+            Long workerId,
+            PolicyStatus status
+    );
 
 }

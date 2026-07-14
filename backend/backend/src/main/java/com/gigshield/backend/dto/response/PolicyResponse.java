@@ -2,6 +2,8 @@ package com.gigshield.backend.dto.response;
 
 import lombok.Data;
 
+import java.time.LocalDate;
+
 @Data
 public class PolicyResponse {
 
@@ -17,6 +19,9 @@ public class PolicyResponse {
 
     private String status;
 
+    private LocalDate coverageStart;
+
+    private LocalDate coverageEnd;
 
     
 }
