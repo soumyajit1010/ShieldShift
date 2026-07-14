@@ -163,11 +163,44 @@ public class ClaimService {
         return response;
     }
 
-    public List<Claim> getWorkerClaims(
+    public List<ClaimHistoryResponse> getWorkerClaims(
             Long workerId) {
 
-        return claimRepository.findByWorkerId(
-                workerId);
+        List<Claim> claims =
+                claimRepository.findByWorkerId(workerId);
+
+        return claims.stream()
+                .map(this::mapToHistoryResponse)
+                .toList();
+    }
+
+    private ClaimHistoryResponse mapToHistoryResponse(
+            Claim claim) {
+
+        ClaimHistoryResponse response =
+                new ClaimHistoryResponse();
+
+        response.setClaimId(
+                claim.getId());
+
+        response.setEvent(
+                claim.getDisruptionEvent()
+                        .getEventType()
+                        .name());
+
+        response.setClaimDate(
+                claim.getCreatedAt());
+
+        response.setClaimStatus(
+                claim.getStatus().name());
+
+        response.setPayoutAmount(
+                claim.getPayoutAmount());
+
+        response.setFraudScore(
+                claim.getFraudScore());
+
+        return response;
     }
 }
 

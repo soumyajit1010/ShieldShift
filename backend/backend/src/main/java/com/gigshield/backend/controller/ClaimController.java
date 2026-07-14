@@ -1,6 +1,7 @@
 package com.gigshield.backend.controller;
 
 import com.gigshield.backend.dto.request.ClaimRequest;
+import com.gigshield.backend.dto.response.ClaimHistoryResponse;
 import com.gigshield.backend.dto.response.ClaimResponse;
 import com.gigshield.backend.model.Claim;
 import com.gigshield.backend.service.ClaimService;
@@ -25,10 +26,9 @@ public class ClaimController {
     }
 
     @GetMapping("/worker/{workerId}")
-    public List<Claim> getWorkerClaims(
+    public List<ClaimHistoryResponse> getWorkerClaims(
             @PathVariable Long workerId) {
 
-        return claimService.getWorkerClaims(
-                workerId);
+        return claimService.getWorkerClaims(workerId);
     }
 }

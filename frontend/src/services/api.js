@@ -101,11 +101,7 @@ export const policyApi = {
 
 export const claimsApi = {
 
-  createClaim: async (
-    workerId,
-    policyId,
-    eventId
-  ) => {
+  createClaim: async (workerId, policyId, eventId) => {
 
     const response = await axios.post(
       `${API_URL}/claims/process`,
@@ -117,20 +113,28 @@ export const claimsApi = {
     );
 
     return response.data;
-  }
+  },
 
-};
+  getWorkerClaims: async (workerId) => {
 
-export const eventApi = {
-
-  getEvents: async () => {
-
-    const response =
-      await axios.get(
-        `${API_URL}/events`
-      );
+    const response = await axios.get(
+      `${API_URL}/claims/worker/${workerId}`
+    );
 
     return response.data;
   }
 
 };
+
+export const eventApi = {
+  getEvents: async () => {
+    const response = await axios.get(
+      `${API_URL}/events`
+    );
+
+    return response.data;
+  }
+};
+
+
+

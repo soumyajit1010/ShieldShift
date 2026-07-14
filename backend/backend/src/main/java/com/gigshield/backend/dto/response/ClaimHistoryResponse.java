@@ -9,11 +9,14 @@ public class ClaimHistoryResponse {
 
     private Long claimId;
 
+    private String event;
+
+    private LocalDateTime claimDate;
+
+    private String claimStatus;
+
     private double payoutAmount;
 
     private double fraudScore;
 
-    private String status;
-
-    private LocalDateTime createdAt;
 }

@@ -1,15 +1,31 @@
-import { useState, useEffect } from 'react';
-import { claimsApi } from '../../services/api';
-import { Activity, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { claimsApi } from "../../services/api";
+import { useAuthStore } from "../../store/useAuthStore";
+import {
+  Activity,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Shield,
+  Calendar,
+  IndianRupee,
+} from "lucide-react";
 
 export default function ClaimTracker() {
+  const user = useAuthStore((state) => state.user);
+
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) return;
+
     async function fetchClaims() {
       try {
-        const data = await claimsApi.getClaims();
+        const data = await claimsApi.getWorkerClaims(user.id);
+
+        console.log("Claims:", data);
+
         setClaims(data);
       } catch (err) {
         console.error(err);
@@ -17,85 +33,175 @@ export default function ClaimTracker() {
         setLoading(false);
       }
     }
+
     fetchClaims();
-  }, []);
+  }, [user]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 animate-spin rounded-full border-4 border-dark-border border-t-brand-500" />
+      <div className="flex justify-center items-center h-64">
+        <div className="w-10 h-10 rounded-full border-4 border-dark-border border-t-brand-500 animate-spin" />
       </div>
     );
   }
 
-  const getStatusIcon = (status) => {
+  const getStatusColor = (status) => {
     switch (status) {
-      case 'SUCCESS': return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'PENDING': return <Clock className="w-5 h-5 text-gold-500" />;
-      default: return <AlertCircle className="w-5 h-5 text-red-500" />;
+      case "AUTO_APPROVED":
+        return "bg-green-500/20 text-green-400 border-green-500/20";
+
+      case "PENDING":
+        return "bg-yellow-500/20 text-yellow-400 border-yellow-500/20";
+
+      default:
+        return "bg-red-500/20 text-red-400 border-red-500/20";
     }
   };
 
-  const getStatusText = (status) => {
+  const getStatusIcon = (status) => {
     switch (status) {
-      case 'SUCCESS': return 'Paid out via UPI';
-      case 'PENDING': return 'Processing';
-      default: return 'Failed / Rejected';
+      case "AUTO_APPROVED":
+        return <CheckCircle className="w-5 h-5 text-green-400" />;
+
+      case "PENDING":
+        return <Clock className="w-5 h-5 text-yellow-400" />;
+
+      default:
+        return <AlertCircle className="w-5 h-5 text-red-400" />;
     }
   };
 
   return (
     <div className="space-y-6">
-      <div className="pb-2">
-        <h1 className="text-3xl font-extrabold tracking-tight text-white font-display mb-1">Your Claims</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          History of automated payouts triggered by disruptions.
+
+      <div>
+        <h1 className="text-3xl font-extrabold text-white">
+          Your Claims
+        </h1>
+
+        <p className="text-gray-400 mt-2">
+          History of all claims submitted under your policy.
         </p>
       </div>
 
-      {claims.length > 0 ? (
-        <div className="space-y-4">
+      {claims.length === 0 ? (
+        <div className="bg-dark-card border border-dark-border rounded-3xl p-10 text-center">
+
+          <Activity className="mx-auto w-10 h-10 text-gray-500" />
+
+          <h2 className="mt-4 text-xl font-bold text-white">
+            No Claims Yet
+          </h2>
+
+          <p className="text-gray-400 mt-2">
+            File a claim whenever a disruption affects your work.
+          </p>
+
+        </div>
+      ) : (
+        <div className="space-y-5">
+
           {claims.map((claim) => (
-            <div key={claim.id} className="bg-dark-card border border-dark-border rounded-3xl p-6 shadow-lg">
-              <div className="flex justify-between items-start mb-5">
+            <div
+              key={claim.claimId}
+              className="bg-dark-card border border-dark-border rounded-3xl p-6 shadow-lg"
+            >
+              <div className="flex justify-between items-start">
+
                 <div>
-                  <span className="text-[10px] font-bold tracking-widest text-gray-500 uppercase">
-                    {claim.id}
-                  </span>
-                  <h3 className="mt-1.5 text-lg font-bold text-white leading-tight">
-                    {claim.reason}
-                  </h3>
-                  <p className="text-xs font-medium border border-dark-highlight bg-dark-bg text-gray-400 px-2.5 py-1 rounded inline-block mt-3">
-                    {new Date(claim.date).toLocaleDateString()}
+
+                  <p className="text-xs uppercase tracking-widest text-gray-500">
+                    Claim #{claim.claimId}
                   </p>
+
+                  <h2 className="text-xl font-bold text-white mt-2">
+                    {claim.event.replaceAll("_", " ")}
+                  </h2>
+
                 </div>
-                <div className="text-right flex items-center justify-center p-3 py-1.5 bg-green-500/10 rounded-xl border border-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]">
-                  <span className="text-xl font-black text-green-400 tracking-tighter">
-                    +₹{claim.amount}
-                  </span>
+
+                <div
+                  className={`px-4 py-2 rounded-full border text-sm font-bold ${getStatusColor(
+                    claim.claimStatus
+                  )}`}
+                >
+                  {claim.claimStatus.replaceAll("_", " ")}
                 </div>
               </div>
-              
-              <div className="pt-4 mt-2 border-t border-dark-border flex items-center justify-between">
-                <div className="flex items-center">
-                  {getStatusIcon(claim.status)}
-                  <span className="ml-2.5 text-sm font-bold text-gray-300">
-                    {getStatusText(claim.status)}
-                  </span>
+
+              <div className="grid grid-cols-2 gap-5 mt-6">
+
+                <div className="bg-dark-highlight rounded-xl p-4">
+
+                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+                    <Calendar size={14} />
+                    Claim Date
+                  </p>
+
+                  <p className="text-white font-semibold">
+                    {new Date(claim.claimDate).toLocaleString()}
+                  </p>
+
                 </div>
+
+                <div className="bg-dark-highlight rounded-xl p-4">
+
+                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+                    <IndianRupee size={14} />
+                    Payout
+                  </p>
+
+                  <p className="text-green-400 font-bold text-xl">
+                    ₹{claim.payoutAmount}
+                  </p>
+
+                </div>
+
+                <div className="bg-dark-highlight rounded-xl p-4">
+
+                  <p className="text-xs text-gray-400 mb-1">
+                    Fraud Score
+                  </p>
+
+                  <p className="text-yellow-400 font-bold">
+                    {claim.fraudScore}
+                  </p>
+
+                </div>
+
+                <div className="bg-dark-highlight rounded-xl p-4">
+
+                  <p className="text-xs text-gray-400 mb-1">
+                    Verification
+                  </p>
+
+                  <div className="flex items-center gap-2">
+
+                    {getStatusIcon(claim.claimStatus)}
+
+                    <span className="font-semibold text-white">
+                      {claim.claimStatus === "AUTO_APPROVED"
+                        ? "Approved"
+                        : claim.claimStatus}
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+              <div className="mt-6 border-t border-dark-border pt-4 flex items-center gap-2">
+
+                <Shield className="text-brand-500" size={18} />
+
+                <span className="text-sm text-gray-400">
+                  Processed automatically by GigShield AI
+                </span>
+
               </div>
             </div>
           ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center p-12 text-center bg-dark-highlight/30 rounded-3xl border border-dashed border-dark-border">
-          <div className="bg-dark-highlight p-4 rounded-full mb-4 border border-dark-border">
-             <Activity className="w-8 h-8 text-gray-500" />
-          </div>
-          <h3 className="text-lg font-bold text-white mb-2">No Claims Yet</h3>
-          <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
-            A disruption hasn't affected your zone yet while your policy was active.
-          </p>
         </div>
       )}
     </div>
