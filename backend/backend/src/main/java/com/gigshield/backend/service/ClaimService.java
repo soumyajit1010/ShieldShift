@@ -1,206 +1,336 @@
-
 package com.gigshield.backend.service;
+
 
 import com.gigshield.backend.dto.request.ClaimRequest;
 import com.gigshield.backend.dto.response.*;
 import com.gigshield.backend.integration.MLClient;
-import com.gigshield.backend.model.Claim;
-import com.gigshield.backend.model.DisruptionEvent;
-import com.gigshield.backend.model.Policy;
-import com.gigshield.backend.model.User;
+import com.gigshield.backend.model.*;
 import com.gigshield.backend.model.enums.ClaimStatus;
-import com.gigshield.backend.repository.ClaimRepository;
-import com.gigshield.backend.repository.DisruptionEventRepository;
-import com.gigshield.backend.repository.PolicyRepository;
-import com.gigshield.backend.repository.UserRepository;
+import com.gigshield.backend.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+
 @Service
 public class ClaimService {
+
 
     @Autowired
     private MLClient mlClient;
 
+
     @Autowired
     private ClaimRepository claimRepository;
+
 
     @Autowired
     private UserRepository userRepository;
 
+
     @Autowired
     private PolicyRepository policyRepository;
+
 
     @Autowired
     private DisruptionEventRepository eventRepository;
 
+
     @Autowired
     private PayoutService payoutService;
+
+
 
     public ClaimResponse processClaim(
             ClaimRequest request) {
 
-        // Fetch Worker
-        User worker = userRepository.findById(
-                        request.getWorkerId())
-                .orElseThrow(() ->
-                        new RuntimeException("Worker not found"));
 
-        // Fetch Policy
-        Policy policy = policyRepository.findById(
-                        request.getPolicyId())
-                .orElseThrow(() ->
-                        new RuntimeException("Policy not found"));
+        /*
+         * 1. Fetch database entities
+         */
 
-        // Fetch Event
-        DisruptionEvent event =
-                eventRepository.findById(
-                                request.getEventId())
+        User worker =
+                userRepository.findById(
+                                request.getWorkerId()
+                        )
                         .orElseThrow(() ->
                                 new RuntimeException(
-                                        "Event not found"));
+                                        "Worker not found"
+                                ));
 
-        // Call ML APIs
-//        SeverityResponse severity =
-//                mlClient.getSeverity(
-//                        request.getSeverityRequest());
-//
-//        LossResponse loss =
-//                mlClient.getLoss(
-//                        request.getLossRequest());
-//
-//        FraudResponse fraud =
-//                mlClient.getFraud(
-//                        request.getFraudRequest());
 
-        String severity = "HIGH";
+        Policy policy =
+                policyRepository.findById(
+                                request.getPolicyId()
+                        )
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Policy not found"
+                                ));
 
-        double loss = 500;
 
-        double fraud = 0.2;
+        DisruptionEvent event =
+                eventRepository.findById(
+                                request.getEventId()
+                        )
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Event not found"
+                                ));
 
-        String fraudDecision = "LEGIT";
 
-        double payout = 700;
 
-        // Calculate payout
-//        double payout =
-//                loss.getEstimated_loss_inr()
-//                        * severity.getPayout_modifier();
+        /*
+         * 2. Validate ML requests
+         */
 
-        // Decide claim status
+        if(request.getSeverityRequest()==null ||
+                request.getLossRequest()==null ||
+                request.getFraudRequest()==null){
+
+            throw new RuntimeException(
+                    "ML request data missing"
+            );
+        }
+
+
+
+        /*
+         * 3. Call ML Service
+         */
+
+        SeverityResponse severityResponse =
+                mlClient.getSeverity(
+                        request.getSeverityRequest()
+                );
+
+
+        LossResponse lossResponse =
+                mlClient.getLoss(
+                        request.getLossRequest()
+                );
+
+
+        FraudResponse fraudResponse =
+                mlClient.getFraud(
+                        request.getFraudRequest()
+                );
+
+
+
+        /*
+         * 4. Calculate payout dynamically
+         */
+
+        double estimatedLoss =
+                lossResponse.getEstimated_loss_inr();
+
+
+        double payoutModifier =
+                severityResponse.getPayout_modifier();
+
+
+        double payout =
+                estimatedLoss * payoutModifier;
+
+
+
+        /*
+         * 5. Fraud decision
+         */
+
         ClaimStatus status;
 
-        if (fraud >= 0.8) {
+
+        if(fraudResponse.getFraud_score() >= 0.8){
 
             status = ClaimStatus.REJECTED;
 
-        } else {
+        }
+        else{
 
             status = ClaimStatus.AUTO_APPROVED;
+
         }
 
-        // Create Claim
+
+
+        /*
+         * 6. Save claim
+         */
+
+
         Claim claim = new Claim();
 
+
         claim.setWorker(worker);
+
         claim.setPolicy(policy);
+
         claim.setDisruptionEvent(event);
 
-        claim.setPayoutAmount(payout);
+
+        claim.setPayoutAmount(
+                payout
+        );
+
 
         claim.setFraudScore(
-                fraud);
+                fraudResponse.getFraud_score()
+        );
+
 
         claim.setStatus(status);
 
-        if (status == ClaimStatus.REJECTED) {
+
+
+        if(status == ClaimStatus.REJECTED){
 
             claim.setRejectionReason(
-                    "High fraud score");
+                    "High fraud score"
+            );
+
         }
 
-        // Save Claim
+
+
         Claim savedClaim =
                 claimRepository.save(claim);
 
-        // Auto Create Payout
-        if (status == ClaimStatus.AUTO_APPROVED) {
+
+
+        /*
+         * 7. Create payout
+         */
+
+
+        if(status == ClaimStatus.AUTO_APPROVED){
 
             payoutService.createPayout(
                     savedClaim,
                     worker,
-                    payout);
+                    payout
+            );
+
         }
 
-        // Response
+
+
+        /*
+         * 8. Send response
+         */
+
+
         ClaimResponse response =
                 new ClaimResponse();
 
+
+
         response.setClaimId(
-                savedClaim.getId());
+                savedClaim.getId()
+        );
+
 
         response.setSeverityClass(
-                severity);
+                severityResponse.getSeverity_class()
+        );
+
 
         response.setEstimatedLoss(
-                loss);
+                estimatedLoss
+        );
+
 
         response.setFraudScore(
-                fraud);
+                fraudResponse.getFraud_score()
+        );
+
 
         response.setFraudDecision(
-                String.valueOf(fraud));
+                fraudResponse.getDecision()
+        );
+
 
         response.setPayoutAmount(
-                payout);
+                payout
+        );
+
 
         response.setClaimStatus(
-                status.name());
+                status.name()
+        );
+
 
         return response;
+
     }
+
+
+
+
 
     public List<ClaimHistoryResponse> getWorkerClaims(
             Long workerId) {
 
+
         List<Claim> claims =
                 claimRepository.findByWorkerId(workerId);
+
 
         return claims.stream()
                 .map(this::mapToHistoryResponse)
                 .toList();
+
     }
+
+
+
+
 
     private ClaimHistoryResponse mapToHistoryResponse(
             Claim claim) {
 
+
         ClaimHistoryResponse response =
                 new ClaimHistoryResponse();
 
+
         response.setClaimId(
-                claim.getId());
+                claim.getId()
+        );
+
 
         response.setEvent(
                 claim.getDisruptionEvent()
                         .getEventType()
-                        .name());
+                        .name()
+        );
+
 
         response.setClaimDate(
-                claim.getCreatedAt());
+                claim.getCreatedAt()
+        );
+
 
         response.setClaimStatus(
-                claim.getStatus().name());
+                claim.getStatus()
+                        .name()
+        );
+
 
         response.setPayoutAmount(
-                claim.getPayoutAmount());
+                claim.getPayoutAmount()
+        );
+
 
         response.setFraudScore(
-                claim.getFraudScore());
+                claim.getFraudScore()
+        );
+
 
         return response;
-    }
-}
 
+    }
+
+}

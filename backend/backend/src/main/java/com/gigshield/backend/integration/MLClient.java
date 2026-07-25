@@ -25,6 +25,11 @@ public class MLClient {
         headers.setContentType(
                 MediaType.APPLICATION_JSON);
 
+        System.out.println(
+                "Sending Severity Request: "
+                        + request
+        );
+
         HttpEntity<SeverityRequest> entity =
                 new HttpEntity<>(
                         request,
@@ -35,6 +40,11 @@ public class MLClient {
                         BASE_URL + "/severity",
                         entity,
                         SeverityResponse.class);
+
+        System.out.println(
+                "Received ML Response: "
+                        + response.getBody()
+        );
 
         return response.getBody();
     }
@@ -62,6 +72,36 @@ public class MLClient {
         return response.getBody();
     }
 
+    public PremiumResponse predictPremium(
+            PremiumRequest request
+    ) {
+
+        HttpHeaders headers = new HttpHeaders();
+
+        headers.setContentType(
+                MediaType.APPLICATION_JSON
+        );
+
+
+        HttpEntity<PremiumRequest> entity =
+                new HttpEntity<>(
+                        request,
+                        headers
+                );
+
+
+        ResponseEntity<PremiumResponse> response =
+                restTemplate.postForEntity(
+                        "http://localhost:5000/predict/premium",
+                        entity,
+                        PremiumResponse.class
+                );
+
+
+        return response.getBody();
+
+    }
+
     public FraudResponse getFraud(
             FraudRequest request) {
 
@@ -81,6 +121,29 @@ public class MLClient {
                         BASE_URL + "/fraud",
                         entity,
                         FraudResponse.class);
+
+        return response.getBody();
+    }
+
+
+    public DashboardRiskResponse getDashboardRisk(
+            DashboardRiskRequest request) {
+
+        HttpHeaders headers = new HttpHeaders();
+
+        headers.setContentType(
+                MediaType.APPLICATION_JSON);
+
+        HttpEntity<DashboardRiskRequest> entity =
+                new HttpEntity<>(
+                        request,
+                        headers);
+
+        ResponseEntity<DashboardRiskResponse> response =
+                restTemplate.postForEntity(
+                        BASE_URL + "/dashboard-risk",
+                        entity,
+                        DashboardRiskResponse.class);
 
         return response.getBody();
     }

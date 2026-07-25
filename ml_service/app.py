@@ -11,6 +11,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "https://gigshields.netlify.app"}})
 
+
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "ok"}), 200
@@ -19,7 +20,8 @@ def health():
 # ==========================================
 # 1. LOAD DYNAMIC PRICING MODEL (XGBoost)
 # ==========================================
-PRICING_MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models', 'gigshield_model.pkl')
+PRICING_MODEL_PATH = os.path.join(os.path.dirname(
+    __file__), 'models', 'gigshield_model.pkl')
 try:
     pricing_data = joblib.load(PRICING_MODEL_PATH)
     pricing_model = pricing_data['model']
@@ -40,7 +42,8 @@ except Exception as e:
 # ==========================================
 # 2. CURFEW MODEL — lazy loaded on first request
 # ==========================================
-CURFEW_MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models', 'road_classifier_efficientnet_b3.pth')
+CURFEW_MODEL_PATH = os.path.join(os.path.dirname(
+    __file__), 'models', 'road_classifier_efficientnet_b3.pth')
 CURFEW_CLASSES = ['Road_block', 'Road_clear']
 IMG_SIZE = 300
 
@@ -48,6 +51,7 @@ IMG_SIZE = 300
 curfew_model = None
 curfew_transform = None
 device = None
+
 
 def load_curfew_model():
     """Load torch/timm model lazily on first request."""
@@ -65,7 +69,8 @@ def load_curfew_model():
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
 
-    model = timm.create_model('efficientnet_b3', pretrained=False, num_classes=2)
+    model = timm.create_model(
+        'efficientnet_b3', pretrained=False, num_classes=2)
     ckpt = torch.load(CURFEW_MODEL_PATH, map_location=device)
     if isinstance(ckpt, dict) and 'model_state_dict' in ckpt:
         model.load_state_dict(ckpt['model_state_dict'])
@@ -82,64 +87,121 @@ def load_curfew_model():
 
 @app.route('/predict/premium', methods=['POST'])
 def predict_premium():
+
     if not pricing_model:
-        return jsonify({"success": False, "message": "Pricing model not loaded"}), 500
-        
+        return jsonify({
+            "success": False,
+            "message": "Pricing model not loaded"
+        }), 500
+
     try:
-        data = request.json
-        
+
+        data = request.get_json()
+
+        print("\n========== PREMIUM REQUEST ==========")
+        print(data)
+        print("=====================================\n")
+
         plan_name = data.get('plan', 'RAKSHAK').upper()
         risk_zone = data.get('risk_zone', 'MODERATE').upper()
+
+        # Normalize values before encoding
+        platform = data.get('platform', 'Zomato').title()
+        vehicle_type = data.get('vehicle_type', 'two_wheeler').lower()
+
         claim_history = int(data.get('claim_history', 0))
         policy_year = int(data.get('policy_year', 1))
         heat_addon = int(data.get('heat_addon', 0))
         disruption_days_hist = int(data.get('disruption_days_hist', 5))
-        platform = data.get('platform', 'Zomato')
-        
-        base_premium_map = {'SAATHI': 399, 'RAKSHAK': 699, 'SURAKSHA': 999}
-        zone_factor_map = {'HIGH': 1.20, 'MODERATE': 1.00, 'SAFE': 0.85}
-        claim_factor_map = {0: 0.90, 1: 1.00, 2: 1.15}
-        loyalty_map = {1: 1.0, 2: 0.95, 3: 0.90}
-        
+
+        monthly_earnings = float(data.get('monthly_earnings', 20000))
+        daily_hours = float(data.get('daily_hours', 8))
+
+        base_premium_map = {
+            "SAATHI": 399,
+            "RAKSHAK": 699,
+            "SURAKSHA": 999
+        }
+
+        zone_factor_map = {
+            "HIGH": 1.20,
+            "MODERATE": 1.00,
+            "SAFE": 0.85
+        }
+
+        claim_factor_map = {
+            0: 0.90,
+            1: 1.00,
+            2: 1.15
+        }
+
+        loyalty_map = {
+            1: 1.00,
+            2: 0.95,
+            3: 0.90
+        }
+
         base_premium = base_premium_map.get(plan_name, 699)
         zone_factor = zone_factor_map.get(risk_zone, 1.0)
         claim_factor = claim_factor_map.get(min(claim_history, 2), 1.0)
         loyalty_factor = loyalty_map.get(min(policy_year, 3), 0.90)
-        
-        plan_enc = int(pricing_encoders['plan'].transform([plan_name])[0]) if pricing_encoders.get('plan') else 1
-        zone_enc = int(pricing_encoders['zone'].transform([risk_zone])[0]) if pricing_encoders.get('zone') else 1
-        veh_enc  = int(pricing_encoders['vehicle'].transform([data.get('vehicle_type', 'two_wheeler')])[0]) if pricing_encoders.get('vehicle') else 0
-        plat_enc = int(pricing_encoders['platform'].transform([platform])[0]) if pricing_encoders.get('platform') else 0
-        
-        monthly_earnings = float(data.get('monthly_earnings', 20000))
-        daily_hours = float(data.get('daily_hours', 8))
-        
+
+        plan_enc = int(
+            pricing_encoders["plan"].transform([plan_name])[0]
+        ) if pricing_encoders.get("plan") else 1
+
+        zone_enc = int(
+            pricing_encoders["zone"].transform([risk_zone])[0]
+        ) if pricing_encoders.get("zone") else 1
+
+        veh_enc = int(
+            pricing_encoders["vehicle"].transform([vehicle_type])[0]
+        ) if pricing_encoders.get("vehicle") else 0
+
+        plat_enc = int(
+            pricing_encoders["platform"].transform([platform])[0]
+        ) if pricing_encoders.get("platform") else 0
+
         input_row = {
-            'plan_enc':              [plan_enc],
-            'zone_enc':              [zone_enc],
-            'claim_history':         [min(claim_history, 2)],
-            'policy_year':           [min(policy_year, 3)],
-            'heat_addon':            [heat_addon],
-            'monthly_earnings':      [monthly_earnings],
-            'daily_hours':           [daily_hours],
-            'veh_enc':               [veh_enc],
-            'plat_enc':              [plat_enc],
-            'disruption_days_hist':  [disruption_days_hist],
-            'zone_factor':           [zone_factor],
-            'claim_factor':          [claim_factor],
-            'loyalty_factor':        [loyalty_factor],
-            'base_premium':          [base_premium],
+            "plan_enc": [plan_enc],
+            "zone_enc": [zone_enc],
+            "claim_history": [min(claim_history, 2)],
+            "policy_year": [min(policy_year, 3)],
+            "heat_addon": [heat_addon],
+            "monthly_earnings": [monthly_earnings],
+            "daily_hours": [daily_hours],
+            "veh_enc": [veh_enc],
+            "plat_enc": [plat_enc],
+            "disruption_days_hist": [disruption_days_hist],
+            "zone_factor": [zone_factor],
+            "claim_factor": [claim_factor],
+            "loyalty_factor": [loyalty_factor],
+            "base_premium": [base_premium]
         }
-        
+
         df = pd.DataFrame(input_row)
+
         prediction = pricing_model.predict(df)[0]
-        
+
         return jsonify({
-            "success": True, 
-            "data": {"final_price": float(prediction)}
+            "success": True,
+            "data": {
+                "final_price": float(prediction)
+            }
         })
+
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+
+        import traceback
+
+        print("\n========== PREMIUM ERROR ==========")
+        traceback.print_exc()
+        print("===================================\n")
+
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
 
 
 @app.route('/predict/curfew', methods=['POST'])
@@ -190,17 +252,10 @@ def predict_curfew():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
-
-
-
-
-
-
 @app.route('/ml/severity', methods=['POST'])
 def severity():
 
     data = request.get_json()
-
 
     severity_value = float(
         data.get("severity_value", 0.5)
@@ -223,7 +278,6 @@ def severity():
         "payout_modifier": modifier,
         "confidence": 0.90
     })
-
 
 
 @app.route('/ml/forecast', methods=['POST'])
@@ -250,7 +304,6 @@ def forecast():
     return jsonify({
         "estimated_loss_inr": estimated_loss
     })
-
 
 
 @app.route('/ml/fraud', methods=['POST'])
@@ -281,8 +334,119 @@ def fraud():
         "decision": decision
     })
 
+@app.route("/ml/dashboard-risk", methods=["POST"])
+def dashboard_risk():
 
+    data = request.get_json()
 
+    zone = data.get("zone")
+    platform = data.get("platform")
+    avg_hourly_income = float(data.get("avgHourlyIncome", 0))
+    avg_daily_hours = float(data.get("avgDailyHours", 0))
+
+    # -----------------------------
+    # Risk Logic
+    # -----------------------------
+
+    rain_risk = "LOW"
+    heat_risk = "LOW"
+    aqi_risk = "LOW"
+    bandh_risk = "LOW"
+
+    overall_risk = 20
+
+    # Zone based risk
+
+    high_risk_zones = [
+        "WHITEFIELD",
+        "MARATHAHALLI",
+        "ELECTRONIC CITY"
+    ]
+
+    medium_risk_zones = [
+        "KORAMANGALA",
+        "HSR LAYOUT"
+    ]
+
+    if zone.upper() in high_risk_zones:
+
+        rain_risk = "HIGH"
+        heat_risk = "MEDIUM"
+        aqi_risk = "MEDIUM"
+
+        overall_risk += 45
+
+    elif zone.upper() in medium_risk_zones:
+
+        rain_risk = "MEDIUM"
+        heat_risk = "LOW"
+        aqi_risk = "LOW"
+
+        overall_risk += 25
+
+    else:
+
+        overall_risk += 10
+
+    # Platform Adjustment
+
+    if platform.upper() == "ZOMATO":
+
+        overall_risk += 8
+
+    elif platform.upper() == "SWIGGY":
+
+        overall_risk += 5
+
+    # Income Loss Estimation
+
+    disruption_hours = overall_risk / 20
+
+    predicted_income_loss = round(
+        avg_hourly_income * disruption_hours,
+        2
+    )
+
+    # Forecast Message
+
+    if overall_risk >= 80:
+
+        forecast = (
+            "Heavy rainfall is expected during the next 48 hours. "
+            "Delivery income may reduce significantly."
+        )
+
+    elif overall_risk >= 60:
+
+        forecast = (
+            "Moderate weather disruption expected. "
+            "Some delivery delays may occur."
+        )
+
+    else:
+
+        forecast = (
+            "Low disruption expected. "
+            "Normal delivery operations likely."
+        )
+
+    return jsonify({
+
+        "overallRiskScore": overall_risk,
+
+        "rainRisk": rain_risk,
+
+        "heatRisk": heat_risk,
+
+        "aqiRisk": aqi_risk,
+
+        "bandhRisk": bandh_risk,
+
+        "predictedIncomeLoss": predicted_income_loss,
+
+        "forecastMessage": forecast
+
+    })
 
 
 if __name__ == "__main__":
