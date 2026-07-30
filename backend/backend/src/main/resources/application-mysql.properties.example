@@ -1,0 +1,14 @@
+# Copy this file to application-mysql.properties and fill in your MySQL password.
+# Then start with: .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=mysql"
+#
+# Create the database first:
+#   CREATE DATABASE gigshield;
+
+spring.datasource.url=jdbc:mysql://localhost:3306/gigshield
+spring.datasource.username=root
+spring.datasource.password=YOUR_PASSWORD
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.defer-datasource-initialization=true
+spring.sql.init.mode=always

@@ -1,7 +1,7 @@
 package com.gigshield.backend.service;
 
 
-import com.gigshield.backend.dto.request.ClaimRequest;
+import com.gigshield.backend.dto.request.*;
 import com.gigshield.backend.dto.response.*;
 import com.gigshield.backend.integration.MLClient;
 import com.gigshield.backend.model.*;
@@ -10,6 +10,8 @@ import com.gigshield.backend.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 
 
@@ -82,17 +84,23 @@ public class ClaimService {
 
 
         /*
-         * 2. Validate ML requests
+         * 2. Build ML requests from entities when frontend omits them
          */
 
-        if(request.getSeverityRequest()==null ||
-                request.getLossRequest()==null ||
-                request.getFraudRequest()==null){
+        SeverityRequest severityRequest =
+                request.getSeverityRequest() != null
+                        ? request.getSeverityRequest()
+                        : buildSeverityRequest(event);
 
-            throw new RuntimeException(
-                    "ML request data missing"
-            );
-        }
+        LossRequest lossRequest =
+                request.getLossRequest() != null
+                        ? request.getLossRequest()
+                        : buildLossRequest(worker, event);
+
+        FraudRequest fraudRequest =
+                request.getFraudRequest() != null
+                        ? request.getFraudRequest()
+                        : buildFraudRequest(worker);
 
 
 
@@ -101,21 +109,22 @@ public class ClaimService {
          */
 
         SeverityResponse severityResponse =
-                mlClient.getSeverity(
-                        request.getSeverityRequest()
-                );
+                mlClient.getSeverity(severityRequest);
 
+
+        // Loss forecast needs severity class from the severity model
+        if (request.getLossRequest() == null) {
+            lossRequest.setSeverity_class(
+                    severityResponse.getSeverity_class()
+            );
+        }
 
         LossResponse lossResponse =
-                mlClient.getLoss(
-                        request.getLossRequest()
-                );
+                mlClient.getLoss(lossRequest);
 
 
         FraudResponse fraudResponse =
-                mlClient.getFraud(
-                        request.getFraudRequest()
-                );
+                mlClient.getFraud(fraudRequest);
 
 
 
@@ -269,7 +278,6 @@ public class ClaimService {
 
 
 
-
     public List<ClaimHistoryResponse> getWorkerClaims(
             Long workerId) {
 
@@ -284,6 +292,61 @@ public class ClaimService {
 
     }
 
+
+
+
+    private SeverityRequest buildSeverityRequest(DisruptionEvent event) {
+        SeverityRequest request = new SeverityRequest();
+        request.setDisruption_type(event.getEventType().name());
+        request.setSeverity_value(event.getSeverityValue());
+        request.setDuration_hours(resolveDurationHours(event));
+        request.setZone_risk_tier(2);
+        request.setTime_of_day(LocalDateTime.now().getHour());
+        request.setHistorical_avg_severity(event.getSeverityValue());
+        return request;
+    }
+
+    private LossRequest buildLossRequest(User worker, DisruptionEvent event) {
+        LossRequest request = new LossRequest();
+        request.setDisruption_type(event.getEventType().name());
+        request.setSeverity_class("MEDIUM");
+        request.setDuration_hours(resolveDurationHours(event));
+        request.setWorker_avg_hourly_income(
+                worker.getAvgHourlyIncome() > 0
+                        ? worker.getAvgHourlyIncome()
+                        : 150.0
+        );
+        request.setZone_risk_tier(2);
+        request.setTime_of_day(LocalDateTime.now().getHour());
+        return request;
+    }
+
+    private FraudRequest buildFraudRequest(User worker) {
+        FraudRequest request = new FraudRequest();
+        request.setWorker_id(worker.getId().intValue());
+        request.setDistance_to_zone_km(0.5);
+        request.setPlatform_status("ONLINE");
+        request.setClaim_frequency_30d(
+                (int) claimRepository.findByWorkerId(worker.getId()).stream().count()
+        );
+        request.setAvg_claim_amount_30d(0.0);
+        request.setHours_since_last_claim(72);
+        request.setDevice_id_match(true);
+        request.setGps_trajectory_score(0.9);
+        request.setEvent_cluster_count(1);
+        return request;
+    }
+
+    private double resolveDurationHours(DisruptionEvent event) {
+        if (event.getTriggeredAt() != null && event.getEndedAt() != null) {
+            long minutes = Duration.between(
+                    event.getTriggeredAt(),
+                    event.getEndedAt()
+            ).toMinutes();
+            return Math.max(1.0, minutes / 60.0);
+        }
+        return 2.0;
+    }
 
 
 

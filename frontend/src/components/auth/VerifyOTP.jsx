@@ -154,6 +154,7 @@ export default function VerifyOTP() {
             </button>
 
             <div className="mt-6 text-center relative z-10">
+              <p className="mb-3 text-xs font-semibold text-brand-400">Use 1234 for demo</p>
               <button
                 className="text-sm font-bold text-gray-400 hover:text-white transition-colors"
                 onClick={() => toast.success("New OTP sent!")}

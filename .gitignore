@@ -42,6 +42,7 @@ ml_service/models/
 *.log
 logs/
 
-# Secrets
-application.properties
+# Secrets / local overrides (default application.properties is safe H2 config)
+application-mysql.properties
 application-dev.properties
+application-local.properties
