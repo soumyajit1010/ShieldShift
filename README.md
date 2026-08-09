@@ -12,7 +12,6 @@ A full-stack platform that protects food delivery partners from income loss caus
 
 </div>
 
-hello I'm soumyajit
 
 ---
 
