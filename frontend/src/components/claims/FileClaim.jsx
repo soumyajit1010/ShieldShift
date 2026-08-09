@@ -6,16 +6,27 @@ import {
   CheckCircle2,
   ShieldCheck,
   TriangleAlert,
+  Upload,
+  FileImage,
 } from "lucide-react";
 
+import { useDashboardStore } from "../../store/useDashboardStore";
 import { eventApi, claimsApi } from "../../services/api";
 import { useAuthStore } from "../../store/useAuthStore";
 
 export default function FileClaim() {
   const user = useAuthStore((state) => state.user);
+  const fetchDashboard = useDashboardStore(
+  (state) => state.fetchDashboard
+);
 
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState("");
+
+  const [description, setDescription] = useState("");
+  const [image, setImage] = useState(null);
+  const [preview, setPreview] = useState(null);
+
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [claimResult, setClaimResult] = useState(null);
@@ -41,43 +52,94 @@ export default function FileClaim() {
     }
   };
 
-  const handleClaim = async () => {
-    if (!selectedEvent) {
-      toast.error("Please select a disruption event.");
-      return;
-    }
+  const handleImageChange = (e) => {
 
-    try {
-      setSubmitting(true);
+  const file = e.target.files[0];
 
-      // TODO: Replace with active policy from backend/dashboard
-      const policyId = 1;
+  if (!file) return;
 
-      const response = await claimsApi.createClaim(
-        user.id,
-        policyId,
-        Number(selectedEvent)
-      );
+  setImage(file);
 
-      console.log(response);
+  setPreview(URL.createObjectURL(file));
 
-      setClaimResult(response);
+};
 
-      toast.success("Claim submitted successfully!");
-    } catch (error) {
-      console.error(error);
 
-      toast.error(
-        error?.response?.data?.message ||
-          "Failed to submit claim."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+
+const handleClaim = async () => {
+
+  if (!selectedEvent) {
+    toast.error("Please select a disruption event.");
+    return;
+  }
+
+
+  try {
+
+    setSubmitting(true);
+
+
+    // Temporary
+    const policyId = 1;
+
+
+    console.log("Description:", description);
+    console.log("Image:", image);
+
+
+
+    const response = await claimsApi.createClaim(
+      user.id,
+      policyId,
+      Number(selectedEvent),
+      description,
+      image
+    );
+
+
+    console.log(response);
+
+
+    setClaimResult(response);
+
+
+
+    // Refresh dashboard after claim
+    await fetchDashboard(user.id);
+
+
+
+    toast.success(
+      "Claim submitted successfully!"
+    );
+
+
+  } catch(error) {
+
+
+    console.error(error);
+
+
+    toast.error(
+      error?.response?.data?.message ||
+      "Failed to submit claim."
+    );
+
+
+  } finally {
+
+
+    setSubmitting(false);
+
+
+  }
+
+};
 
   return (
     <div className="max-w-4xl mx-auto p-6 text-white">
+
+      {/* Header */}
 
       <div className="mb-8">
         <h1 className="text-4xl font-black">
@@ -85,8 +147,7 @@ export default function FileClaim() {
         </h1>
 
         <p className="text-gray-400 mt-2">
-          Select an active disruption event and
-          submit your insurance claim.
+          Select an active disruption event and submit your insurance claim.
         </p>
       </div>
 
@@ -104,7 +165,7 @@ export default function FileClaim() {
         </div>
       )}
 
-      {/* Empty */}
+      {/* No Events */}
 
       {!loadingEvents && events.length === 0 && (
         <div className="bg-dark-card border border-dark-border rounded-3xl p-10 text-center">
@@ -116,14 +177,13 @@ export default function FileClaim() {
           </h2>
 
           <p className="text-gray-400 mt-3">
-            There are currently no disruption events
-            available for claim filing.
+            There are currently no disruption events available for claim filing.
           </p>
 
         </div>
       )}
 
-      {/* Events */}
+      {/* Claim Form */}
 
       {!loadingEvents && events.length > 0 && (
         <div className="bg-dark-card border border-dark-border rounded-3xl p-6">
@@ -138,9 +198,7 @@ export default function FileClaim() {
 
               <label
                 key={event.id}
-                className={`block cursor-pointer rounded-2xl border p-5 transition-all
-
-                ${
+                className={`block cursor-pointer rounded-2xl border p-5 transition-all ${
                   Number(selectedEvent) === event.id
                     ? "border-brand-500 bg-brand-500/10"
                     : "border-dark-border bg-dark-highlight hover:border-brand-500/50"
@@ -190,6 +248,90 @@ export default function FileClaim() {
 
           </div>
 
+          {/* Description */}
+
+          <div className="mt-8">
+
+            <h3 className="text-lg font-bold mb-3">
+              Description (Optional)
+            </h3>
+
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              placeholder="Describe what happened..."
+              className="w-full rounded-2xl bg-dark-highlight border border-dark-border p-4 outline-none focus:border-brand-500 resize-none"
+            />
+
+          </div>
+
+          {/* Upload Evidence */}
+
+
+<div className="mt-8">
+
+  <h2 className="text-2xl font-bold mb-4">
+    Upload Evidence
+  </h2>
+
+  <label
+    htmlFor="claim-image"
+    className="block cursor-pointer rounded-2xl border-2 border-dashed border-dark-border hover:border-brand-500 transition-all bg-dark-highlight p-8 text-center"
+  >
+
+    <p className="text-white font-semibold">
+      📷 Choose Road Image
+    </p>
+
+    <p className="text-sm text-gray-400 mt-2">
+      JPG, PNG or JPEG
+    </p>
+
+  </label>
+
+  <input
+    id="claim-image"
+    type="file"
+    accept="image/*"
+    onChange={handleImageChange}
+    className="hidden"
+  />
+
+  {image && (
+
+    <div className="mt-4">
+
+      <p className="text-sm text-green-400">
+        Selected: {image.name}
+      </p>
+
+    </div>
+
+  )}
+
+</div>
+
+{preview && (
+
+  <div className="mt-6">
+
+    <h3 className="font-bold mb-3">
+      Image Preview
+    </h3>
+
+    <img
+      src={preview}
+      alt="Claim Evidence"
+      className="rounded-2xl border border-dark-border w-full max-h-96 object-cover"
+    />
+
+  </div>
+
+)}
+
+          {/* Submit */}
+
           <button
             onClick={handleClaim}
             disabled={submitting || claimResult}
@@ -209,7 +351,7 @@ export default function FileClaim() {
         </div>
       )}
 
-      {/* Claim Result */}
+      {/* Result */}
 
       {claimResult && (
 
@@ -242,48 +384,58 @@ export default function FileClaim() {
             </div>
 
             <div className="bg-dark-card rounded-xl p-5">
-              <p className="text-gray-400 text-sm">
-                Severity
-              </p>
-
+              <p className="text-gray-400 text-sm">Severity</p>
               <p className="font-bold">
                 {claimResult.severityClass}
               </p>
-
             </div>
 
             <div className="bg-dark-card rounded-xl p-5">
-              <p className="text-gray-400 text-sm">
-                Estimated Loss
-              </p>
-
+              <p className="text-gray-400 text-sm">Estimated Loss</p>
               <p className="font-bold">
                 ₹{claimResult.estimatedLoss}
               </p>
-
             </div>
 
             <div className="bg-dark-card rounded-xl p-5">
-              <p className="text-gray-400 text-sm">
-                Fraud Score
-              </p>
-
+              <p className="text-gray-400 text-sm">Fraud Score</p>
               <p className="font-bold">
                 {claimResult.fraudScore}
               </p>
-
             </div>
 
             <div className="bg-dark-card rounded-xl p-5">
-              <p className="text-gray-400 text-sm">
-                Fraud Decision
-              </p>
-
+              <p className="text-gray-400 text-sm">Fraud Decision</p>
               <p className="font-bold">
                 {claimResult.fraudDecision}
               </p>
-
             </div>
+
+            <div className="bg-dark-card rounded-xl p-5">
+
+  <p className="text-gray-400 text-sm">
+    Road Evidence AI
+  </p>
+
+
+  <p className="font-bold text-white">
+    {claimResult.roadPrediction || "No Image Analysis"}
+  </p>
+
+
+  {claimResult.imageConfidence && (
+
+    <p className="text-gray-400 text-sm mt-2">
+
+      Confidence:
+      {" "}
+      {(claimResult.imageConfidence * 100).toFixed(2)}%
+
+    </p>
+
+  )}
+
+</div>
 
             <div className="md:col-span-2 bg-brand-500/10 rounded-xl p-6 border border-brand-500">
 

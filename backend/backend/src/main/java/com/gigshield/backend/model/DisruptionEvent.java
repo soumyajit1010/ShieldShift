@@ -31,4 +31,10 @@ public class DisruptionEvent {
     private Boolean isVerified = false;
 
     private LocalDateTime endedAt;
+
+    // NEW FIELD
+    @Column(name = "data_source")
+    private String dataSource;
+
+
 }

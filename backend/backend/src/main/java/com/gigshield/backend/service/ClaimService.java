@@ -9,6 +9,7 @@ import com.gigshield.backend.model.enums.ClaimStatus;
 import com.gigshield.backend.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -43,19 +44,20 @@ public class ClaimService {
     private PayoutService payoutService;
 
 
-
     public ClaimResponse processClaim(
-            ClaimRequest request) {
+            ClaimRequest request,
+            MultipartFile image
+    ) {
 
 
         /*
+         * =====================================================
          * 1. Fetch database entities
+         * =====================================================
          */
 
         User worker =
-                userRepository.findById(
-                                request.getWorkerId()
-                        )
+                userRepository.findById(request.getWorkerId())
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Worker not found"
@@ -63,9 +65,7 @@ public class ClaimService {
 
 
         Policy policy =
-                policyRepository.findById(
-                                request.getPolicyId()
-                        )
+                policyRepository.findById(request.getPolicyId())
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Policy not found"
@@ -73,9 +73,7 @@ public class ClaimService {
 
 
         DisruptionEvent event =
-                eventRepository.findById(
-                                request.getEventId()
-                        )
+                eventRepository.findById(request.getEventId())
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Event not found"
@@ -83,8 +81,12 @@ public class ClaimService {
 
 
 
+
+
         /*
-         * 2. Build ML requests from entities when frontend omits them
+         * =====================================================
+         * 2. Prepare ML requests
+         * =====================================================
          */
 
         SeverityRequest severityRequest =
@@ -92,10 +94,14 @@ public class ClaimService {
                         ? request.getSeverityRequest()
                         : buildSeverityRequest(event);
 
+
+
         LossRequest lossRequest =
                 request.getLossRequest() != null
                         ? request.getLossRequest()
-                        : buildLossRequest(worker, event);
+                        : buildLossRequest(worker,event);
+
+
 
         FraudRequest fraudRequest =
                 request.getFraudRequest() != null
@@ -104,40 +110,189 @@ public class ClaimService {
 
 
 
+
+
+
+
         /*
-         * 3. Call ML Service
+         * =====================================================
+         * 3. Run existing AI models
+         *
+         * Severity
+         * Loss
+         * Fraud
+         * =====================================================
          */
 
+
         SeverityResponse severityResponse =
-                mlClient.getSeverity(severityRequest);
+                mlClient.getSeverity(
+                        severityRequest
+                );
 
 
-        // Loss forecast needs severity class from the severity model
-        if (request.getLossRequest() == null) {
+
+        if(request.getLossRequest()==null){
+
             lossRequest.setSeverity_class(
                     severityResponse.getSeverity_class()
             );
+
         }
 
+
+
         LossResponse lossResponse =
-                mlClient.getLoss(lossRequest);
+                mlClient.getLoss(
+                        lossRequest
+                );
+
 
 
         FraudResponse fraudResponse =
-                mlClient.getFraud(fraudRequest);
+                mlClient.getFraud(
+                        fraudRequest
+                );
+
+
+
+
 
 
 
         /*
-         * 4. Calculate payout dynamically
+         * =====================================================
+         * 4. Image ML Integration
+         *
+         * User uploads road image
+         *
+         * Spring Boot
+         *        |
+         *        ↓
+         * Flask
+         *        |
+         *        ↓
+         * Road_clear / Road_block
+         *
+         * =====================================================
          */
+
+
+        ImagePredictionResponse imageResponse = null;
+
+
+
+        if(image != null && !image.isEmpty()) {
+
+
+            try {
+
+
+                imageResponse =
+                        mlClient.getRoadPrediction(
+                                image
+                        );
+
+
+            }
+            catch(Exception e) {
+
+
+                System.out.println(
+                        "Image ML failed : "
+                                + e.getMessage()
+                );
+
+            }
+
+        }
+
+
+
+
+
+
+
+        /*
+         * =====================================================
+         * 5. Image based severity adjustment
+         *
+         * If:
+         *
+         * Road_block = true
+         * Confidence > 90%
+         *
+         * Then:
+         *
+         * Severity becomes HIGH
+         *
+         * =====================================================
+         */
+
+
+        if(imageResponse != null
+                &&
+                imageResponse.getData() != null) {
+
+
+
+            boolean blocked =
+                    imageResponse
+                            .getData()
+                            .isBlocked();
+
+
+
+            double confidence =
+                    imageResponse
+                            .getData()
+                            .getConfidence();
+
+
+
+            if(blocked && confidence > 0.90) {
+
+
+
+                System.out.println(
+                        "Image confirms road blockage. Increasing severity."
+                );
+
+
+
+                severityResponse.setSeverity_class(
+                        "HIGH"
+                );
+
+            }
+
+        }
+
+
+
+
+
+
+
+        /*
+         * =====================================================
+         * 6. Calculate payout
+         *
+         * IMPORTANT:
+         * This happens AFTER image adjustment
+         *
+         * =====================================================
+         */
+
 
         double estimatedLoss =
                 lossResponse.getEstimated_loss_inr();
 
 
+
         double payoutModifier =
                 severityResponse.getPayout_modifier();
+
 
 
         double payout =
@@ -145,28 +300,47 @@ public class ClaimService {
 
 
 
+
+
+
+
         /*
-         * 5. Fraud decision
+         * =====================================================
+         * 7. Fraud decision
+         * =====================================================
          */
+
 
         ClaimStatus status;
 
 
-        if(fraudResponse.getFraud_score() >= 0.8){
 
-            status = ClaimStatus.REJECTED;
+        if(fraudResponse.getFraud_score() >= 0.8) {
+
+
+            status =
+                    ClaimStatus.REJECTED;
+
 
         }
-        else{
+        else {
 
-            status = ClaimStatus.AUTO_APPROVED;
+
+            status =
+                    ClaimStatus.AUTO_APPROVED;
 
         }
+
+
+
+
 
 
 
         /*
-         * 6. Save claim
+         * =====================================================
+         * 8. Save claim
+         * =====================================================
          */
 
 
@@ -175,7 +349,9 @@ public class ClaimService {
 
         claim.setWorker(worker);
 
+
         claim.setPolicy(policy);
+
 
         claim.setDisruptionEvent(event);
 
@@ -190,11 +366,14 @@ public class ClaimService {
         );
 
 
-        claim.setStatus(status);
+        claim.setStatus(
+                status
+        );
 
 
 
-        if(status == ClaimStatus.REJECTED){
+        if(status == ClaimStatus.REJECTED) {
+
 
             claim.setRejectionReason(
                     "High fraud score"
@@ -209,12 +388,19 @@ public class ClaimService {
 
 
 
+
+
+
+
         /*
-         * 7. Create payout
+         * =====================================================
+         * 9. Create payout
+         * =====================================================
          */
 
 
-        if(status == ClaimStatus.AUTO_APPROVED){
+        if(status == ClaimStatus.AUTO_APPROVED) {
+
 
             payoutService.createPayout(
                     savedClaim,
@@ -226,8 +412,14 @@ public class ClaimService {
 
 
 
+
+
+
+
         /*
-         * 8. Send response
+         * =====================================================
+         * 10. Build response
+         * =====================================================
          */
 
 
@@ -271,11 +463,55 @@ public class ClaimService {
         );
 
 
+
+
+
+
+
+        /*
+         * =====================================================
+         * 11. Add image result to response
+         * =====================================================
+         */
+
+
+        if(imageResponse != null
+                &&
+                imageResponse.getData() != null) {
+
+
+
+            response.setRoadPrediction(
+                    imageResponse
+                            .getData()
+                            .getPrediction()
+            );
+
+
+
+            response.setImageConfidence(
+                    imageResponse
+                            .getData()
+                            .getConfidence()
+            );
+
+
+
+            response.setRoadBlocked(
+                    imageResponse
+                            .getData()
+                            .isBlocked()
+            );
+
+        }
+
+
+
+
+
         return response;
 
     }
-
-
 
 
     public List<ClaimHistoryResponse> getWorkerClaims(

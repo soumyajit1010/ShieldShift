@@ -2,7 +2,9 @@ package com.gigshield.backend.controller;
 
 import com.gigshield.backend.dto.request.DisruptionEventRequest;
 import com.gigshield.backend.dto.response.DisruptionEventResponse;
+import com.gigshield.backend.service.AQIMonitorService;
 import com.gigshield.backend.service.DisruptionEventService;
+import com.gigshield.backend.service.WeatherMonitorService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,5 +39,36 @@ public class DisruptionEventController {
             @PathVariable Long id) {
 
         return eventService.getEventById(id);
+    }
+
+
+    @Autowired
+    private WeatherMonitorService weatherMonitorService;
+
+
+
+    @GetMapping("/weather-check/{zoneId}")
+    public String checkWeather(
+            @PathVariable Long zoneId
+    ){
+
+        weatherMonitorService.checkWeather(zoneId);
+
+        return "Weather checked";
+
+    }
+
+
+    @Autowired
+    private AQIMonitorService aqiMonitorService;
+
+    @GetMapping("/aqi-check/{zoneId}")
+    public String checkAQI(
+            @PathVariable Long zoneId
+    ) {
+
+        aqiMonitorService.checkAQI(zoneId);
+
+        return "AQI checked";
     }
 }

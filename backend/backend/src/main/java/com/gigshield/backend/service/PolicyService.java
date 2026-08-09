@@ -3,6 +3,7 @@ package com.gigshield.backend.service;
 
 import com.gigshield.backend.dto.request.PolicyRequest;
 import com.gigshield.backend.dto.request.PremiumRequest;
+import com.gigshield.backend.dto.response.PlanPriceResponse;
 import com.gigshield.backend.dto.response.PolicyResponse;
 import com.gigshield.backend.dto.response.PremiumResponse;
 import com.gigshield.backend.integration.MLClient;
@@ -17,6 +18,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 
 @Service
@@ -540,6 +543,80 @@ public class PolicyService {
                 policy
         );
 
+    }
+
+
+    public List<PlanPriceResponse> getPlanPrices(Long workerId) {
+
+        User worker = userRepository.findById(workerId)
+                .orElseThrow(() ->
+                        new RuntimeException("Worker not found"));
+
+        List<PlanPriceResponse> plans = new ArrayList<>();
+
+        plans.add(buildPlan(worker, PolicyTier.BASIC));
+
+        plans.add(buildPlan(worker, PolicyTier.STANDARD));
+
+        plans.add(buildPlan(worker, PolicyTier.PRO));
+
+        return plans;
+    }
+
+    private PlanPriceResponse buildPlan(
+            User worker,
+            PolicyTier tier) {
+
+        PremiumRequest request =
+                buildPremiumRequest(worker, tier);
+
+        PremiumResponse premium =
+                mlClient.predictPremium(request);
+
+        PlanPriceResponse response =
+                new PlanPriceResponse();
+
+        switch (tier) {
+
+            case BASIC:
+
+                response.setId("basic");
+                response.setName("SAATHHI");
+                response.setLabel("Essential protection");
+                response.setAiPrice(
+                        premium.getData().getFinal_price());
+                response.setMaxDaily(250);
+                response.setMaxWeekly(500);
+
+                break;
+
+            case STANDARD:
+
+                response.setId("standard");
+                response.setName("RAKSHAK");
+                response.setLabel("Best for full-time workers");
+                response.setBadge("MOST POPULAR");
+                response.setAiPrice(
+                        premium.getData().getFinal_price());
+                response.setMaxDaily(500);
+                response.setMaxWeekly(1200);
+
+                break;
+
+            case PRO:
+
+                response.setId("pro");
+                response.setName("SURAKSHA");
+                response.setLabel("Maximum coverage");
+                response.setAiPrice(
+                        premium.getData().getFinal_price());
+                response.setMaxDaily(900);
+                response.setMaxWeekly(2500);
+
+                break;
+        }
+
+        return response;
     }
 
 }

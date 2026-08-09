@@ -5,6 +5,15 @@ import lombok.Data;
 @Data
 public class ClaimResponse {
 
+    // Image ML result
+    private String roadPrediction;
+
+    private Double imageConfidence;
+
+    private Boolean roadBlocked;
+
+
+    // Claim result
     private Long claimId;
 
     private String severityClass;
@@ -19,60 +28,4 @@ public class ClaimResponse {
 
     private String claimStatus;
 
-
-    public Long getClaimId() {
-        return claimId;
-    }
-
-    public void setClaimId(Long claimId) {
-        this.claimId = claimId;
-    }
-
-    public String getSeverityClass() {
-        return severityClass;
-    }
-
-    public void setSeverityClass(String severityClass) {
-        this.severityClass = severityClass;
-    }
-
-    public double getEstimatedLoss() {
-        return estimatedLoss;
-    }
-
-    public void setEstimatedLoss(double estimatedLoss) {
-        this.estimatedLoss = estimatedLoss;
-    }
-
-    public double getFraudScore() {
-        return fraudScore;
-    }
-
-    public void setFraudScore(double fraudScore) {
-        this.fraudScore = fraudScore;
-    }
-
-    public String getFraudDecision() {
-        return fraudDecision;
-    }
-
-    public void setFraudDecision(String fraudDecision) {
-        this.fraudDecision = fraudDecision;
-    }
-
-    public double getPayoutAmount() {
-        return payoutAmount;
-    }
-
-    public void setPayoutAmount(double payoutAmount) {
-        this.payoutAmount = payoutAmount;
-    }
-
-    public String getClaimStatus() {
-        return claimStatus;
-    }
-
-    public void setClaimStatus(String claimStatus) {
-        this.claimStatus = claimStatus;
-    }
 }

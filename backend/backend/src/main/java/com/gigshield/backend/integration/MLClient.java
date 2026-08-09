@@ -6,7 +6,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.*;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 
 @Service
 public class MLClient {
@@ -146,6 +152,70 @@ public class MLClient {
                         DashboardRiskResponse.class);
 
         return response.getBody();
+    }
+
+
+
+    public ImagePredictionResponse getRoadPrediction(
+            MultipartFile image
+    ) throws IOException {
+
+
+        String url = "http://localhost:5000/predict/curfew";
+
+
+        HttpHeaders headers = new HttpHeaders();
+
+        headers.setContentType(
+                MediaType.MULTIPART_FORM_DATA
+        );
+
+
+        ByteArrayResource fileResource =
+                new ByteArrayResource(
+                        image.getBytes()
+                ) {
+
+                    @Override
+                    public String getFilename() {
+
+                        return image.getOriginalFilename();
+
+                    }
+
+                };
+
+
+
+        MultiValueMap<String,Object> body =
+                new LinkedMultiValueMap<>();
+
+
+        body.add(
+                "image",
+                fileResource
+        );
+
+
+
+        HttpEntity<MultiValueMap<String,Object>> request =
+                new HttpEntity<>(
+                        body,
+                        headers
+                );
+
+
+
+        ResponseEntity<ImagePredictionResponse> response =
+                restTemplate.postForEntity(
+                        url,
+                        request,
+                        ImagePredictionResponse.class
+                );
+
+
+        return response.getBody();
+
     }
 
 

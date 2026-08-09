@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { policyApi } from "../../services/api";
+import { policyApi, workerApi } from "../../services/api";
 import { useAuthStore } from "../../store/useAuthStore";
 import {
   Bot,
@@ -26,29 +26,51 @@ export default function PlanSelection() {
   const [loading, setLoading] = useState(true);
   const [purchasingId, setPurchasingId] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [dashboard, setDashboard] = useState(null);
   const navigate = useNavigate();
 
   
 
   useEffect(() => {
-    async function loadPlans() {
-      try {
-        const data = await policyApi.getPlans();
 
-        setPlans(data);
+  async function loadData() {
 
-        if (data.length > 0) {
-          setSelectedPlan(data[1] || data[0]);
-        }
-      } catch (err) {
-        toast.error("Failed to load plans");
-      } finally {
-        setLoading(false);
+    try {
+
+      const [plansData, dashboardData] = await Promise.all([
+        policyApi.getPlans(1),
+        workerApi.getDashboard(1)
+      ]);
+
+      setPlans(plansData);
+
+      setDashboard(dashboardData);
+
+      if (plansData.length > 0) {
+        setSelectedPlan(plansData[1] || plansData[0]);
       }
+
+    } catch (err) {
+
+      console.error(err);
+
+      toast.error("Failed to load data");
+
+    } finally {
+
+      setLoading(false);
+
     }
 
-    loadPlans();
-  }, []);
+  }
+
+  if(user){
+
+      loadData();
+
+  }
+
+}, [user]);
 
   const handlePurchase = async (planId) => {
     setPurchasingId(planId);
@@ -120,7 +142,9 @@ export default function PlanSelection() {
             </h3>
           </div>
           <span className="text-xs text-brand-400 mt-1 flex items-center bg-brand-500/10 px-2 py-0.5 rounded-full border border-brand-500/20">
-            <MapPin className="w-3 h-3 mr-1" /> Bengaluru
+            <MapPin className="w-3 h-3 mr-1" />
+
+{user?.city}
           </span>
         </div>
 
@@ -129,12 +153,18 @@ export default function PlanSelection() {
             Current Risk Score
           </span>
           <span className="text-3xl font-black text-gold-500 italic tracking-tighter leading-none">
-            74
+            {dashboard?.overallRiskScore}
           </span>
         </div>
 
         <div className="flex h-1.5 rounded-full overflow-hidden bg-dark-border mb-6 relative z-10">
-          <div className="w-[74%] bg-gradient-to-r from-brand-600 to-brand-400 shadow-[0_0_10px_rgba(239,68,68,0.5)]"></div>
+          <div
+    className="bg-gradient-to-r from-brand-600 to-brand-400 shadow-[0_0_10px_rgba(239,68,68,0.5)]"
+    style={{
+        width: `${dashboard?.overallRiskScore || 0}%`
+    }}
+>
+</div>
         </div>
 
         {/* 7-Day Forecast Text Box */}
@@ -144,24 +174,41 @@ export default function PlanSelection() {
             7-Day Prediction
           </h4>
           <p className="text-sm text-gray-400 leading-relaxed">
-            <strong className="text-white">85% chance</strong> of severe
-            waterlogging in your primary zones due to continuous monsoons. High
-            expected impact on delivery times and earnings.
-          </p>
+
+    {dashboard?.forecastMessage}
+
+</p>
         </div>
+
+        <div className="mt-4 bg-dark-highlight rounded-xl p-3">
+
+    <p className="text-xs text-gray-400">
+
+        Estimated Income Loss
+
+    </p>
+
+    <p className="text-xl font-bold text-red-400">
+
+        ₹{dashboard?.predictedIncomeLoss}
+
+    </p>
+
+</div>
+<br />
 
         <div className="flex gap-2 w-full overflow-x-auto no-scrollbar relative z-10">
           <div className="flex items-center px-3 py-1.5 bg-dark-bg/50 border border-dark-border/80 rounded-full shrink-0">
             <CloudRain className="w-3.5 h-3.5 text-blue-400 mr-1.5" />
-            <span className="text-xs text-gray-300">Rain: High</span>
+            <span className="text-xs text-gray-300">Rain: {dashboard?.rainRisk}</span>
           </div>
           <div className="flex items-center px-3 py-1.5 bg-dark-bg/50 border border-dark-border/80 rounded-full shrink-0">
             <Sun className="w-3.5 h-3.5 text-brand-400 mr-1.5" />
-            <span className="text-xs text-gray-300">Heat: Medium</span>
+            <span className="text-xs text-gray-300">Heat: {dashboard?.heatRisk}</span>
           </div>
           <div className="flex items-center px-3 py-1.5 bg-dark-bg/50 border border-dark-border/80 rounded-full shrink-0">
             <Wind className="w-3.5 h-3.5 text-purple-400 mr-1.5" />
-            <span className="text-xs text-gray-300">AQI: Low</span>
+            <span className="text-xs text-gray-300">AQI: {dashboard?.aqiRisk}</span>
           </div>
         </div>
       </div>

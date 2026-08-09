@@ -8,6 +8,10 @@ import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
+import io
+import base64
+from PIL import Image
+
 from features import (
     PREMIUM_FEATURES, DISRUPTION_FEATURES, FRAUD_FEATURES,
     preprocess_premium_input, get_disruption_label_and_multiplier
@@ -51,6 +55,56 @@ try:
 except Exception as e:
     print(f"[WARNING] Failed to load Fraud Detector: {e}")
     fraud_detector = None
+
+
+
+
+# ==========================================
+# 2. CURFEW MODEL — lazy loaded on first request
+# ==========================================
+CURFEW_MODEL_PATH = os.path.join(os.path.dirname(
+    __file__), 'models', 'road_classifier_efficientnet_b3.pth')
+CURFEW_CLASSES = ['Road_block', 'Road_clear']
+IMG_SIZE = 300
+
+# These are all None at startup — loaded on first /predict/curfew call
+curfew_model = None
+curfew_transform = None
+device = None
+
+
+def load_curfew_model():
+    """Load torch/timm model lazily on first request."""
+    global curfew_model, curfew_transform, device, CURFEW_CLASSES
+
+    import torch
+    import timm
+    from torchvision import transforms
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    curfew_transform = transforms.Compose([
+        transforms.Resize((IMG_SIZE, IMG_SIZE)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ])
+
+    model = timm.create_model(
+        'efficientnet_b3', pretrained=False, num_classes=2)
+    ckpt = torch.load(CURFEW_MODEL_PATH, map_location=device)
+    if isinstance(ckpt, dict) and 'model_state_dict' in ckpt:
+        model.load_state_dict(ckpt['model_state_dict'])
+        if 'class_names' in ckpt:
+            CURFEW_CLASSES = ckpt['class_names']
+    else:
+        model.load_state_dict(ckpt)
+
+    model = model.to(device)
+    model.eval()
+    curfew_model = model
+    print("✅ Curfew Blockade Model loaded.")
+
+
 
 
 # =====================================================================
@@ -109,6 +163,60 @@ def predict_premium():
         
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+
+
+
+@app.route('/predict/curfew', methods=['POST'])  
+def predict_curfew():
+    global curfew_model
+
+    # Lazy load on first request 
+    if curfew_model is None:
+        try:
+            load_curfew_model()
+        except Exception as e:
+            return jsonify({"success": False, "message": f"Curfew model failed to load: {e}"}), 500
+
+    try:
+        import torch
+
+        if 'image' in request.files:
+            file = request.files['image']
+            img = Image.open(file.stream).convert('RGB')
+        elif request.json and 'image_base64' in request.json:
+            img_data = request.json['image_base64']
+            if ',' in img_data:
+                img_data = img_data.split(',')[1]
+            img_bytes = base64.b64decode(img_data)
+            img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
+        else:
+            return jsonify({"success": False, "message": "No image provided"}), 400
+
+        tensor = curfew_transform(img).unsqueeze(0).to(device)
+
+        with torch.no_grad():
+            output = curfew_model(tensor)
+            probs = torch.softmax(output, dim=1).cpu().squeeze().numpy()
+
+        pred_idx = probs.argmax()
+        pred_class = CURFEW_CLASSES[pred_idx]
+        confidence = float(probs[pred_idx])
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "prediction": pred_class,
+                "confidence": confidence,
+                "is_blocked": "block" in pred_class.lower()
+            }
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+
 
 
 @app.route('/predict/disruption', methods=['POST'])

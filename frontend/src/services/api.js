@@ -1,8 +1,6 @@
 import axios from 'axios';
 
-// Mock responses since backend is not fully integrated for some features
-const MOCK_DELAY = 800;
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 
 const API_URL = 'http://localhost:8080/api';
 
@@ -55,36 +53,14 @@ export const workerApi = {
 };
 
 export const policyApi = {
-  getPlans: async () => {
-    await delay(MOCK_DELAY);
-    return [
-      {
-        id: "basic",
-        name: "SAATHI",
-        aiPrice: 29,
-        maxDaily: 250,
-        maxWeekly: 500,
-        label: "Essential protection"
-      },
-      {
-        id: "standard",
-        name: "RAKSHAK",
-        aiPrice: 59,
-        maxDaily: 500,
-        maxWeekly: 1200,
-        badge: "MOST POPULAR",
-        label: "Best for full-time workers"
-      },
-      {
-        id: "pro",
-        name: "SURAKSHA",
-        aiPrice: 99,
-        maxDaily: 900,
-        maxWeekly: 2500,
-        label: "Maximum coverage"
-      }
-    ];
-  },
+  getPlans: async (workerId) => {
+
+    const response = await axios.get(
+        `${API_URL}/policies/prices/${workerId}`
+    );
+
+    return response.data;
+},
   purchasePlan: async (workerId, tier) => {
 
     const response = await axios.post(
@@ -101,19 +77,73 @@ export const policyApi = {
 
 export const claimsApi = {
 
-  createClaim: async (workerId, policyId, eventId) => {
+  createClaim: async (
+    workerId,
+    policyId,
+    eventId,
+    description,
+    image
+  ) => {
 
-    const response = await axios.post(
-      `${API_URL}/claims/process`,
-      {
-        workerId,
-        policyId,
-        eventId
-      }
+
+    const formData = new FormData();
+
+
+    formData.append(
+      "workerId",
+      workerId
     );
 
+
+    formData.append(
+      "policyId",
+      policyId
+    );
+
+
+    formData.append(
+      "eventId",
+      eventId
+    );
+
+
+    formData.append(
+      "description",
+      description
+    );
+
+
+    if(image){
+
+      formData.append(
+        "image",
+        image
+      );
+
+    }
+
+
+
+    const response = await axios.post(
+
+      `${API_URL}/claims/process`,
+
+      formData,
+
+      {
+        headers:{
+          "Content-Type":
+          "multipart/form-data"
+        }
+      }
+
+    );
+
+
     return response.data;
+
   },
+
 
   getWorkerClaims: async (workerId) => {
 

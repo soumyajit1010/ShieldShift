@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/useAuthStore";
+import { useDashboardStore } from "../../store/useDashboardStore";
 import {
   workerApi,
   eventApi,
@@ -23,8 +24,14 @@ export default function Home() {
   const navigate = useNavigate();
 
   const user = useAuthStore((state) => state.user);
+  const data = useDashboardStore(
+  (state) => state.dashboard
+);
 
-  const [data, setData] = useState(null);
+const fetchDashboard = useDashboardStore(
+  (state) => state.fetchDashboard
+);
+
   const [events, setEvents] = useState([]);
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,16 +41,16 @@ export default function Home() {
       try {
         if (!user?.id) return;
 
-        const [dashboard, activeEvents, recentClaims] =
-          await Promise.all([
-            workerApi.getDashboard(user.id),
-            eventApi.getEvents(),
-            claimsApi.getWorkerClaims(user.id),
-          ]);
+        const [activeEvents, recentClaims] =
+  await Promise.all([
+    eventApi.getEvents(),
+    claimsApi.getWorkerClaims(user.id),
+  ]);
 
-        setData(dashboard);
-        setEvents(activeEvents);
-        setClaims(recentClaims.slice(0, 3));
+await fetchDashboard(user.id);
+
+setEvents(activeEvents);
+setClaims(recentClaims.slice(0,3));
       } catch (err) {
         console.error(err);
       } finally {
