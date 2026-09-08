@@ -4,6 +4,8 @@ import com.gigshield.backend.model.DisruptionEvent;
 import com.gigshield.backend.model.enums.EventType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 public interface DisruptionEventRepository
         extends JpaRepository<DisruptionEvent, Long> {
 
@@ -12,4 +14,9 @@ public interface DisruptionEventRepository
             EventType eventType
     );
 
+    Optional<DisruptionEvent>
+    findFirstByZoneIdAndEventTypeAndEndedAtIsNull(
+            Long zoneId,
+            EventType eventType
+    );
 }

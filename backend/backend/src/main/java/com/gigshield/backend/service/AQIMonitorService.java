@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 public class AQIMonitorService {
@@ -66,7 +67,7 @@ public class AQIMonitorService {
          * =================================================
          */
 
-        if(response == null
+        if (response == null
                 || response.getList() == null
                 || response.getList().isEmpty()) {
 
@@ -126,6 +127,7 @@ public class AQIMonitorService {
         );
 
 
+
         /*
          * =================================================
          * 5. Decision Engine
@@ -138,12 +140,11 @@ public class AQIMonitorService {
          * 4 = Poor
          * 5 = Very Poor
          *
-         * We treat AQI 4 or 5 as severe.
+         * AQI 4 or 5 = severe
          * =================================================
          */
 
-        if(aqi >= 4) {
-
+        if (aqi >= 4) {
 
             /*
              * =================================================
@@ -158,8 +159,7 @@ public class AQIMonitorService {
                                     EventType.SEVERE_AQI
                             );
 
-
-            if(exists) {
+            if (exists) {
 
                 System.out.println(
                         "Active SEVERE_AQI event already exists"
@@ -167,7 +167,6 @@ public class AQIMonitorService {
 
                 return;
             }
-
 
             /*
              * =================================================
@@ -178,19 +177,13 @@ public class AQIMonitorService {
             DisruptionEvent event =
                     new DisruptionEvent();
 
-
             event.setEventType(
                     EventType.SEVERE_AQI
             );
 
-
             event.setZone(zone);
 
-
             /*
-             * Convert AQI 4/5
-             * to normalized severity.
-             *
              * AQI 4 → 0.80
              * AQI 5 → 1.00
              */
@@ -200,33 +193,66 @@ public class AQIMonitorService {
                             ? 0.80
                             : 1.00;
 
-
             event.setSeverityValue(
                     severity
             );
-
 
             event.setTriggeredAt(
                     LocalDateTime.now()
             );
 
-
             event.setIsVerified(
                     true
             );
-
 
             event.setDataSource(
                     "AQI_API"
             );
 
-
             eventRepository.save(event);
-
 
             System.out.println(
                     "SEVERE_AQI disruption event created"
             );
+
+        } else {
+
+            /*
+             * =================================================
+             * 8. AQI returned to normal
+             *
+             * Close any active SEVERE_AQI event.
+             * =================================================
+             */
+
+            Optional<DisruptionEvent> activeEvent =
+                    eventRepository
+                            .findFirstByZoneIdAndEventTypeAndEndedAtIsNull(
+                                    zoneId,
+                                    EventType.SEVERE_AQI
+                            );
+
+            if (activeEvent.isPresent()) {
+
+                DisruptionEvent event =
+                        activeEvent.get();
+
+                event.setEndedAt(
+                        LocalDateTime.now()
+                );
+
+                eventRepository.save(event);
+
+                System.out.println(
+                        "SEVERE_AQI disruption event closed"
+                );
+
+            } else {
+
+                System.out.println(
+                        "No active SEVERE_AQI event to close"
+                );
+            }
         }
     }
 }
